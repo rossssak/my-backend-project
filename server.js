@@ -11,17 +11,19 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// ตั้งค่าการเชื่อมต่อ MySQL
 const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'root',
+    host: process.env.DB_HOST || 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com',
+    port: process.env.DB_PORT || 4000,
+    user: process.env.DB_USER || '2L7pQLa7k2ePuPR.root',
+    password: process.env.DB_PASSWORD || 'kJCCEP8DYMyNeA7N',
     database: process.env.DB_NAME || 'myprojact',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    ssl: process.env.DB_SSL === 'true' ? {
-        rejectUnauthorized: false
-    } : false
+    ssl: {
+        minVersion: 'TLSv1.2'
+    }
 });
 
 
