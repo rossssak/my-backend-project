@@ -150,10 +150,12 @@ app.post('/login', async (req, res, next) => {
     }
 });
 
+
 // Route: ดึงข้อมูลทั้งหมด
-app.get('/slist', authenticateToken, async (req, res, next) => {
+app.get('/', (req, res) => {
+    res.json({ message: 'API พร้อมใช้งาน' });
     try {
-        const [rows] = await pool.query('SELECT * FROM doctor LIMIT 30');
+        const [rows] = pool.query('SELECT * FROM doctor');
         res.status(200).json(rows);
     } catch (error) {
         next(error);
