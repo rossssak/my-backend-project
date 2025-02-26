@@ -152,7 +152,7 @@ app.post('/login', async (req, res, next) => {
 
 
 // Route: ดึงข้อมูลทั้งหมด
-app.get('/', (req, res) => {
+app.get('/slist', (req, res) => {
     res.json({ message: 'API พร้อมใช้งาน' });
     try {
         const [rows] = pool.query('SELECT * FROM doctor');
