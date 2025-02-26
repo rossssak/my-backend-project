@@ -3,24 +3,27 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = 'your-secret-key'; // ควรเก็บไว้ใน environment variable
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
 
-// ตั้งค่าการเชื่อมต่อ MySQL
 const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: 'root',
-    database: 'myprojact',
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || 'root',
+    database: process.env.DB_NAME || 'myprojact',
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    ssl: process.env.DB_SSL === 'true' ? {
+        rejectUnauthorized: false
+    } : false
 });
+
 
 // ทดสอบการเชื่อมต่อฐานข้อมูล
 async function testConnection() {
