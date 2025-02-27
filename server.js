@@ -416,4 +416,13 @@ app.listen(port, () => {
     console.log(`Access the application at http://localhost:${port}`);
 });
 
-module.exports = pool; // ส่งออก pool แทน db
+// เริ่มต้นเซิร์ฟเวอร์เฉพาะเมื่อไม่ได้รันบน Vercel
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(port, () => {
+        console.log(`Server is running on port ${port}`);
+        console.log(`Access the application at http://localhost:${port}`);
+    });
+}
+
+// ส่งออก app สำหรับ Vercel
+module.exports = app;
