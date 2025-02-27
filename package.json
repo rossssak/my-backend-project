@@ -2,10 +2,10 @@
   "name": "heart-data-app",
   "version": "1.0.0",
   "description": "Customized dataset of Heart web application",
-  "main": "api/index.js",
+  "main": "api/seerver.js",
   "scripts": {
-    "start": "nodemon api/index.js",
-    "dev": "nodemon api/index.js"
+    "start": "nodemon api/server.js",
+    "dev": "nodemon api/server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
