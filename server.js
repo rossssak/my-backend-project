@@ -3,29 +3,24 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = 'your-secret-key'; // ควรเก็บไว้ใน environment variable
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 
 app.use(cors());
 app.use(express.json());
 
 // ตั้งค่าการเชื่อมต่อ MySQL
 const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com',
-    port: process.env.DB_PORT || 4000,
-    user: process.env.DB_USER || '2L7pQLa7k2ePuPR.root',
-    password: process.env.DB_PASSWORD || 'kJCCEP8DYMyNeA7N',
-    database: process.env.DB_NAME || 'myprojact',
+    host: 'localhost',
+    user: 'root',
+    password: 'root',
+    database: 'myprojact',
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0,
-    ssl: {
-        minVersion: 'TLSv1.2'
-    }
+    queueLimit: 0
 });
-
 
 // ทดสอบการเชื่อมต่อฐานข้อมูล
 async function testConnection() {
@@ -39,24 +34,6 @@ async function testConnection() {
 }
 testConnection();
 
-// Middleware ตรวจสอบ token
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ message: 'Authentication token required' });
-    }
-
-    try {
-        const user = jwt.verify(token, JWT_SECRET);
-        req.user = user;
-        next();
-    } catch (err) {
-        return res.status(403).json({ message: 'Invalid or expired token' });
-    }
-};
-
 // Middleware จัดการ errors
 const errorHandler = (err, req, res, next) => {
     console.error(err.stack);
@@ -65,8 +42,8 @@ const errorHandler = (err, req, res, next) => {
 
 app.use(errorHandler);
 
-// เพิ่ม Route สำหรับดึงข้อมูลพยาบาล
-app.get('/nurses', authenticateToken, async (req, res, next) => {
+// เพิ่ม Route สำหรับดึงข้อมูลพยาบาล - ไม่ต้องใช้ authenticateToken
+app.get('/nurses', async (req, res, next) => {
     try {
         const [rows] = await pool.query('SELECT * FROM nurses ORDER BY id ASC');
         res.status(200).json(rows);
@@ -150,20 +127,18 @@ app.post('/login', async (req, res, next) => {
     }
 });
 
-
-// Route: ดึงข้อมูลทั้งหมด
-app.get('/slist', (req, res) => {
-    res.json({ message: 'API พร้อมใช้งาน' });
+// Route: ดึงข้อมูลทั้งหมด - ไม่ต้องใช้ authenticateToken
+app.get('/slist', async (req, res, next) => {
     try {
-        const [rows] = pool.query('SELECT * FROM doctor');
+        const [rows] = await pool.query('SELECT * FROM doctor LIMIT 30');
         res.status(200).json(rows);
     } catch (error) {
         next(error);
     }
 });
 
-// Route: ดึงข้อมูลตาม ID
-app.get('/slist/:id', authenticateToken, async (req, res, next) => {
+// Route: ดึงข้อมูลตาม ID - ไม่ต้องใช้ authenticateToken
+app.get('/slist/:id', async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
         if (isNaN(id)) {
@@ -179,8 +154,8 @@ app.get('/slist/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-// Route: ค้นหาข้อมูลตามอายุ
-app.get('/api/search', authenticateToken, async (req, res, next) => {
+// Route: ค้นหาข้อมูลตามอายุ - ไม่ต้องใช้ authenticateToken
+app.get('/api/search', async (req, res, next) => {
     try {
         const age = parseInt(req.query.age);
         if (isNaN(age) || age <= 0) {
@@ -193,8 +168,8 @@ app.get('/api/search', authenticateToken, async (req, res, next) => {
     }
 });
 
-// Route: อัปเดตข้อมูลตาม ID
-app.put('/slist/:id', authenticateToken, async (req, res, next) => {
+// Route: อัปเดตข้อมูลตาม ID - ไม่ต้องใช้ authenticateToken
+app.put('/slist/:id', async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
         if (isNaN(id)) {
@@ -228,8 +203,8 @@ app.put('/slist/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-// Route: ลบข้อมูลตาม ID
-app.delete('/slist/:id', authenticateToken, async (req, res, next) => {
+// Route: ลบข้อมูลตาม ID - ไม่ต้องใช้ authenticateToken
+app.delete('/slist/:id', async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
         if (isNaN(id)) {
@@ -247,8 +222,8 @@ app.delete('/slist/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
-// Route: เพิ่มข้อมูลใหม่
-app.post('/slist', authenticateToken, async (req, res, next) => {
+// Route: เพิ่มข้อมูลใหม่ - ไม่ต้องใช้ authenticateToken
+app.post('/slist', async (req, res, next) => {
     try {
         const newData = req.body;
         if (!newData.age || isNaN(newData.age) || newData.age <= 0) {
@@ -273,6 +248,13 @@ app.post('/slist', authenticateToken, async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+});
+
+// เพิ่ม route อื่นๆ ตามต้องการ
+
+// เพิ่ม root route
+app.get('/', (req, res) => {
+    res.send('API is running');
 });
 
 app.listen(port, () => {
