@@ -3,36 +3,25 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = 'your-secret-key'; // ควรเก็บไว้ใน environment variable
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 const app = express();
-const port = 3000;
 
 app.use(cors());
 app.use(express.json());
 
 // ตั้งค่าการเชื่อมต่อ MySQL
 const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: 'root',
-    database: 'myprojact',
+    host: process.env.DB_HOST || 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com',
+    port: process.env.DB_PORT || 4000,
+    user: process.env.DB_USER || '2L7pQLa7k2ePuPR.root',
+    password: process.env.DB_PASSWORD || 'kJCCEP8DYMyNeA7N',
+    database: process.env.DB_NAME || 'myprojact',
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    ssl: process.env.MYSQL_SSL ? {} : false
 });
-
-// ทดสอบการเชื่อมต่อฐานข้อมูล
-async function testConnection() {
-    try {
-        const connection = await pool.getConnection();
-        console.log('Connected to MySQL');
-        connection.release();
-    } catch (err) {
-        console.error('Error connecting to MySQL:', err);
-    }
-}
-testConnection();
 
 // Middleware จัดการ errors
 const errorHandler = (err, req, res, next) => {
@@ -42,7 +31,7 @@ const errorHandler = (err, req, res, next) => {
 
 app.use(errorHandler);
 
-// เพิ่ม Route สำหรับดึงข้อมูลพยาบาล - ไม่ต้องใช้ authenticateToken
+// Routes
 app.get('/nurses', async (req, res, next) => {
     try {
         const [rows] = await pool.query('SELECT * FROM nurses ORDER BY id ASC');
@@ -52,7 +41,6 @@ app.get('/nurses', async (req, res, next) => {
     }
 });
 
-// Route: สมัครสมาชิก
 app.post('/register', async (req, res, next) => {
     try {
         const { username, password } = req.body;
@@ -83,7 +71,6 @@ app.post('/register', async (req, res, next) => {
     }
 });
 
-// Route: เข้าสู่ระบบ
 app.post('/login', async (req, res, next) => {
     try {
         const { username, password } = req.body;
@@ -127,7 +114,6 @@ app.post('/login', async (req, res, next) => {
     }
 });
 
-// Route: ดึงข้อมูลทั้งหมด - ไม่ต้องใช้ authenticateToken
 app.get('/slist', async (req, res, next) => {
     try {
         const [rows] = await pool.query('SELECT * FROM doctor LIMIT 30');
@@ -137,7 +123,6 @@ app.get('/slist', async (req, res, next) => {
     }
 });
 
-// Route: ดึงข้อมูลตาม ID - ไม่ต้องใช้ authenticateToken
 app.get('/slist/:id', async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
@@ -154,7 +139,6 @@ app.get('/slist/:id', async (req, res, next) => {
     }
 });
 
-// Route: ค้นหาข้อมูลตามอายุ - ไม่ต้องใช้ authenticateToken
 app.get('/api/search', async (req, res, next) => {
     try {
         const age = parseInt(req.query.age);
@@ -168,7 +152,6 @@ app.get('/api/search', async (req, res, next) => {
     }
 });
 
-// Route: อัปเดตข้อมูลตาม ID - ไม่ต้องใช้ authenticateToken
 app.put('/slist/:id', async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
@@ -203,7 +186,6 @@ app.put('/slist/:id', async (req, res, next) => {
     }
 });
 
-// Route: ลบข้อมูลตาม ID - ไม่ต้องใช้ authenticateToken
 app.delete('/slist/:id', async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
@@ -222,7 +204,6 @@ app.delete('/slist/:id', async (req, res, next) => {
     }
 });
 
-// Route: เพิ่มข้อมูลใหม่ - ไม่ต้องใช้ authenticateToken
 app.post('/slist', async (req, res, next) => {
     try {
         const newData = req.body;
@@ -250,13 +231,9 @@ app.post('/slist', async (req, res, next) => {
     }
 });
 
-// เพิ่ม route อื่นๆ ตามต้องการ
-
-// เพิ่ม root route
 app.get('/', (req, res) => {
     res.send('API is running');
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}/`);
-});
+// Export handler for serverless function
+module.exports = app;
