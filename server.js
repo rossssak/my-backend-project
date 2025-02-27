@@ -10,18 +10,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ตั้งค่าการเชื่อมต่อ MySQL
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com',
-    port: process.env.DB_PORT || 4000,
-    user: process.env.DB_USER || '2L7pQLa7k2ePuPR.root',
-    password: process.env.DB_PASSWORD || 'kJCCEP8DYMyNeA7N',
-    database: process.env.DB_NAME || 'myprojact',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    ssl: process.env.MYSQL_SSL ? {} : false
-});
+// สร้างฟังก์ชัน pool ที่ใช้ environment variables
+const getDbPool = () => {
+    return mysql.createPool({
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASS,
+      database: process.env.DB_NAME,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      ssl: {
+        // อาจจำเป็นต้องมีการตั้งค่า SSL สำหรับ TiDB Cloud
+        rejectUnauthorized: true
+      }
+    });
+  };
 
 // Middleware จัดการ errors
 const errorHandler = (err, req, res, next) => {
