@@ -3,185 +3,36 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
+const JWT_SECRET = 'your-secret-key'; // ควรเก็บไว้ใน environment variable
+
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 
-// Load environment variables from .env file if present
-dotenv.config();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Check for required environment variables or use defaults
-const DB_HOST = process.env.DB_HOST || 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com';
-const DB_USER = process.env.DB_USER || '2L7pQLa7k2ePuPR.root';
-const DB_PASSWORD = process.env.DB_PASSWORD || 'kJCCEP8DYMyNeA7N';
-const DB_NAME = process.env.DB_NAME || 'myprojact';
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-// Determine the correct path to the CA certificate
-let caPath;
-if (process.env.CA) {
-    caPath = process.env.CA;
-} else {
-    caPath = path.join(__dirname, './certs/isrgrootx.pem');
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(path.join(__dirname, './certs'))) {
-        fs.mkdirSync(path.join(__dirname, './certs'), { recursive: true });
-    }
-}
-
-
-// Simplify the CA certificate handling
-let caContent;
-try {
-  if (process.env.NODE_ENV === 'production') {
-    // In production (Vercel), use the environment variable or a string directly
-    caContent = process.env.CA_CERT || '-----BEGIN CERTIFICATE-----\nMIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\nTzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\ncmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4\nWhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu\nZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY\nMTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc\nh77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+\n0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U\nA5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW\nT8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH\nB5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC\nB5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv\nKBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn\nOlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn\njh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw\nqHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI\nrU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV\nHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq\nhkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL\nubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ\n3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK\nNFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5\nORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur\nTkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC\njNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc\noyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq\n4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA\nmRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d\nemyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n-----END CERTIFICATE-----';
-  } else {
-    // In development, read from file
-    caPath = path.join(__dirname, './certs/isrgrootx.pem');
-    if (!fs.existsSync(path.join(__dirname, './certs'))) {
-      fs.mkdirSync(path.join(__dirname, './certs'), { recursive: true });
-    }
-    
-    if (!fs.existsSync(caPath)) {
-      fs.writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\nMIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\nTzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\ncmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4\nWhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu\nZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY\nMTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc\nh77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+\n0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U\nA5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW\nT8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH\nB5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC\nB5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv\nKBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn\nOlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn\njh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw\nqHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI\nrU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV\nHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq\nhkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL\nubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ\n3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK\nNFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5\nORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur\nTkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC\njNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc\noyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq\n4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA\nmRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d\nemyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n-----END CERTIFICATE-----');
-    }
-    caContent = fs.readFileSync(caPath);
-  }
-} catch (err) {
-  console.error('Error with CA certificate:', err);
-  // Fallback to direct string if file operations fail
-  caContent = '-----BEGIN CERTIFICATE-----\nMIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\nTzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\ncmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4\nWhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu\nZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY\nMTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc\nh77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+\n0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U\nA5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW\nT8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH\nB5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC\nB5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv\nKBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn\nOlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn\njh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw\nqHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI\nrU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV\nHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq\nhkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL\nubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ\n3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK\nNFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5\nORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur\nTkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC\njNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc\noyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq\n4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA\nmRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d\nemyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n-----END CERTIFICATE-----';
-}
-
-// สร้าง connection pool
-const dbConfig = {
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_NAME,
+// ตั้งค่าการเชื่อมต่อ MySQL
+const pool = mysql.createPool({
+    host: 'localhost',
+    user: 'root',
+    password: 'root',
+    database: 'myprojact',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
-};
-
-// Add SSL options only if we're connecting to TiDB Cloud
-if (DB_HOST !== 'localhost') {
-    dbConfig.ssl = {
-        ca: caContent
-    };
-}
-
-const pool = mysql.createPool(dbConfig);
+});
 
 // ทดสอบการเชื่อมต่อฐานข้อมูล
 async function testConnection() {
     try {
         const connection = await pool.getConnection();
-        console.log('Connected to MySQL/TiDB successfully!');
-        
-        // แสดงข้อมูล connection
-        console.log(`Connected to: ${DB_HOST}`);
-        console.log(`Database: ${DB_NAME}`);
-        
-        // Check if tables exist and create them if needed
-        await setupDatabase(connection);
-        
-        connection.release(); // คืน connection กลับไปที่ pool
+        console.log('Connected to MySQL');
+        connection.release();
     } catch (err) {
-        console.error('Error connecting to database:', err);
-        console.log('Please check your database configuration and ensure TiDB/MySQL is running.');
+        console.error('Error connecting to MySQL:', err);
     }
 }
-
-// Set up database tables if they don't exist
-async function setupDatabase(connection) {
-    try {
-        // Check and create users table if it doesn't exist
-        await connection.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(255) NOT NULL UNIQUE,
-                password VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        
-        // Check and create doctor table if it doesn't exist
-        await connection.query(`
-            CREATE TABLE IF NOT EXISTS doctor (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                age INT NOT NULL,
-                sex VARCHAR(10),
-                \`Chest pain type\` VARCHAR(50),
-                trestbps INT,
-                cholesterol INT,
-                \`fasting blood sugar\` VARCHAR(50),
-                \`resting ecg\` VARCHAR(50),
-                \`max heart rate\` INT,
-                \`exercise angina\` VARCHAR(50),
-                oldpeak FLOAT,
-                \`ST slope\` VARCHAR(50),
-                target VARCHAR(10)
-            )
-        `);
-        
-        // Check and create nurses table if it doesn't exist
-        await connection.query(`
-            CREATE TABLE IF NOT EXISTS nurses (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                first_name VARCHAR(255),
-                last_name VARCHAR(255),
-                specialization VARCHAR(255),
-                experience_years INT,
-                certification VARCHAR(255),
-                department VARCHAR(255),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            )
-        `);
-        
-        // Check if doctor table is empty and seed some sample data if it is
-        const [doctorRows] = await connection.query('SELECT COUNT(*) as count FROM doctor');
-        if (doctorRows[0].count === 0) {
-            await connection.query(`
-                INSERT INTO doctor (age, sex, \`Chest pain type\`, trestbps, cholesterol, \`fasting blood sugar\`, \`resting ecg\`, \`max heart rate\`, \`exercise angina\`, oldpeak, \`ST slope\`, target)
-                VALUES 
-                (63, 1, 'typical angina', 145, 233, '1', 'normal', 150, 'no', 2.3, 'downsloping', '1'),
-                (57, 1, 'atypical angina', 130, 131, '0', 'normal', 115, 'yes', 1.2, 'flat', '2'),
-                (52, 1, 'non-anginal pain', 120, 182, '0', 'normal', 150, 'no', 0, 'upsloping', '1'),
-                (44, 1, 'typical angina', 140, 235, '0', 'normal', 180, 'no', 0, 'upsloping', '1'),
-                (59, 1, 'non-anginal pain', 170, 288, '0', 'normal', 159, 'no', 0.2, 'flat', '2')
-            `);
-            console.log('Seeded doctor table with sample data');
-        }
-        
-        // Check if nurses table is empty and seed some sample data if it is
-        const [nursesRows] = await connection.query('SELECT COUNT(*) as count FROM nurses');
-        if (nursesRows[0].count === 0) {
-            await connection.query(`
-                INSERT INTO nurses (first_name, last_name, specialization, experience_years, certification, department)
-                VALUES 
-                ('สมศรี', 'ใจดี', 'โรคหัวใจ', 8, 'พยาบาลวิชาชีพ', 'แผนกหัวใจ'),
-                ('วิภา', 'รักษ์สุขภาพ', 'โรคหัวใจวิกฤต', 12, 'พยาบาลเฉพาะทางโรคหัวใจ', 'แผนกฉุกเฉิน'),
-                ('ประภา', 'สุขสมบูรณ์', 'การรักษาโรคหัวใจ', 5, 'พยาบาลวิชาชีพ', 'แผนกเวชศาสตร์ป้องกัน')
-            `);
-            console.log('Seeded nurses table with sample data');
-        }
-        
-        console.log('Database setup completed successfully');
-    } catch (err) {
-        console.error('Error setting up database:', err);
-    }
-}
-
-testConnection(); // เรียกฟังก์ชันทดสอบการเชื่อมต่อ
+testConnection();
 
 // Middleware ตรวจสอบ token
 const authenticateToken = (req, res, next) => {
@@ -206,9 +57,10 @@ const errorHandler = (err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ message: 'Internal Server Error', error: err.message });
 };
+
 app.use(errorHandler);
 
-// Route: ดึงข้อมูลพยาบาล
+// เพิ่ม Route สำหรับดึงข้อมูลพยาบาล
 app.get('/nurses', authenticateToken, async (req, res, next) => {
     try {
         const [rows] = await pool.query('SELECT * FROM nurses ORDER BY id ASC');
@@ -269,7 +121,7 @@ app.post('/login', async (req, res, next) => {
 
         const user = users[0];
         const validPassword = await bcrypt.compare(password, user.password);
-
+        
         if (!validPassword) {
             return res.status(401).json({ message: 'รหัสผ่านไม่ถูกต้อง' });
         }
@@ -416,22 +268,6 @@ app.post('/slist', authenticateToken, async (req, res, next) => {
     }
 });
 
-// Serve static files if needed
-app.use(express.static('public'));
-
-// เริ่มต้นเซิร์ฟเวอร์
 app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-    console.log(`Access the application at http://localhost:${port}`);
+    console.log(`Server running at http://localhost:${port}/`);
 });
-
-// Replace the two app.listen blocks with this:
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(port, () => {
-      console.log(`Server is running on port ${port}`);
-      console.log(`Access the application at http://localhost:${port}`);
-    });
-  }
-  
-  // Export the app for Vercel
-  module.exports = app;
