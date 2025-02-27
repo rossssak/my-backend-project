@@ -1,21 +1,19 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// เปลี่ยนการเชื่อมต่อฐานข้อมูลไปใช้ TiDB
 const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    port: parseInt(process.env.DB_PORT || '4000'),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    host: process.env.DB_HOST || '127.0.0.1', // เปลี่ยนเป็น host ของ TiDB
+    port: parseInt(process.env.DB_PORT || '4000'), // พอร์ตของ TiDB
+    user: process.env.DB_USER || 'root', // ผู้ใช้ของ TiDB
+    password: process.env.DB_PASSWORD || '', // รหัสผ่านของ TiDB
+    database: process.env.DB_NAME || 'test', // ชื่อฐานข้อมูลใน TiDB
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -42,82 +40,9 @@ app.get('/nurses', async (req, res, next) => {
     }
 });
 
-app.post('/register', async (req, res, next) => {
-    try {
-        const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
-        }
-
-        const [existingUser] = await pool.query(
-            'SELECT * FROM users WHERE username = ?',
-            [username]
-        );
-
-        if (existingUser.length > 0) {
-            return res.status(400).json({ message: 'Username นี้ถูกใช้งานแล้ว' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const [result] = await pool.query(
-            'INSERT INTO users (username, password) VALUES (?, ?)',
-            [username, hashedPassword]
-        );
-
-        res.status(201).json({ message: 'สมัครสมาชิกสำเร็จ' });
-    } catch (error) {
-        next(error);
-    }
-});
-
-app.post('/login', async (req, res, next) => {
-    try {
-        const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ message: 'กรุณากรอก username และ password' });
-        }
-
-        const [users] = await pool.query(
-            'SELECT * FROM users WHERE username = ?',
-            [username]
-        );
-
-        if (users.length === 0) {
-            return res.status(401).json({ message: 'ไม่พบผู้ใช้งาน' });
-        }
-
-        const user = users[0];
-        const validPassword = await bcrypt.compare(password, user.password);
-        
-        if (!validPassword) {
-            return res.status(401).json({ message: 'รหัสผ่านไม่ถูกต้อง' });
-        }
-
-        const token = jwt.sign(
-            { id: user.id, username: user.username },
-            JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        res.json({
-            message: 'เข้าสู่ระบบสำเร็จ',
-            token,
-            user: {
-                id: user.id,
-                username: user.username
-            }
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
 app.get('/slist', async (req, res, next) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM doctor LIMIT 30');
+        const [rows] = await pool.query('SELECT * FROM doctor');
         res.status(200).json(rows);
     } catch (error) {
         next(error);
