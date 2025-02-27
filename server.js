@@ -3,12 +3,12 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = 'your-secret-key'; // ควรเก็บไว้ใน environment variable
 
+const JWT_SECRET = 'your-secret-key'; // ควรเก็บไว้ใน environment variable
 const app = express();
 const port = 3000;
 
-app.use(cors());
+app.use(cors()); 
 app.use(express.json());
 
 // ตั้งค่าการเชื่อมต่อ MySQL
@@ -33,6 +33,11 @@ async function testConnection() {
     }
 }
 testConnection();
+
+// เพิ่ม Route พื้นฐานเพื่อหลีกเลี่ยง "Cannot GET /"
+app.get('/', (req, res) => {
+    res.status(200).json({ message: 'API is running' });
+});
 
 // Middleware ตรวจสอบ token
 const authenticateToken = (req, res, next) => {
@@ -60,16 +65,6 @@ const errorHandler = (err, req, res, next) => {
 
 app.use(errorHandler);
 
-// เพิ่ม Route สำหรับดึงข้อมูลพยาบาล
-app.get('/nurses', authenticateToken, async (req, res, next) => {
-    try {
-        const [rows] = await pool.query('SELECT * FROM nurses ORDER BY id ASC');
-        res.status(200).json(rows);
-    } catch (error) {
-        next(error);
-    }
-});
-
 // Route: สมัครสมาชิก
 app.post('/register', async (req, res, next) => {
     try {
@@ -90,7 +85,7 @@ app.post('/register', async (req, res, next) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const [result] = await pool.query(
+        await pool.query(
             'INSERT INTO users (username, password) VALUES (?, ?)',
             [username, hashedPassword]
         );
@@ -145,8 +140,8 @@ app.post('/login', async (req, res, next) => {
     }
 });
 
-// Route: ดึงข้อมูลทั้งหมด
-app.get('/slist', authenticateToken, async (req, res, next) => {
+// ดึงข้อมูลทั้งหมดโดยไม่ต้อง login
+app.get('/slist', async (req, res, next) => {
     try {
         const [rows] = await pool.query('SELECT * FROM doctor LIMIT 30');
         res.status(200).json(rows);
@@ -221,6 +216,16 @@ app.put('/slist/:id', authenticateToken, async (req, res, next) => {
     }
 });
 
+// เพิ่ม Route สำหรับดึงข้อมูลพยาบาล
+app.get('/nurses', authenticateToken, async (req, res, next) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM nurses ORDER BY id ASC');
+        res.status(200).json(rows);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Route: ลบข้อมูลตาม ID
 app.delete('/slist/:id', authenticateToken, async (req, res, next) => {
     try {
@@ -267,6 +272,8 @@ app.post('/slist', authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
+
+
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}/`);
